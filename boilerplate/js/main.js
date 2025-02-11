@@ -32,7 +32,7 @@ var Esri_OceanBasemap = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest
 	maxZoom: 13
 });
 
-// overlay the bottom layer for 
+// overlay the bottom layer for some color on the land and a bit of water over the bathymetry
 var Stadia_StamenWatercolor = L.tileLayer('https://tiles.stadiamaps.com/tiles/stamen_watercolor/{z}/{x}/{y}.{ext}', {
 	minZoom: 1,
 	maxZoom: 16,
