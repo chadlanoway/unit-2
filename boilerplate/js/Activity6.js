@@ -4,7 +4,6 @@ var minValue;
 
 // Step 1: Create the map
 function createMap(){
-    // Create the map centered at [0, 0] with zoom level 2
     map = L.map('map', {
         center: [0, 0],
         zoom: 2
@@ -19,9 +18,9 @@ function createMap(){
     getData();
 }
 
-// Calculate the minimum value (using only nonzero values)
+// Calculate the minimum value 
 function calculateMinValue(data){
-    // Create empty array to store all nonzero data values
+
     var allValues = [];
     
     // Loop through each city
@@ -30,7 +29,7 @@ function calculateMinValue(data){
         for (var year = 1985; year <= 2015; year += 5){
             // Get population for current year
             var value = city.properties[String(year)];
-            // Only include nonzero values
+            // Only include nonzero values, there's a few <1000 pop so 0
             if (value > 0) {
                 allValues.push(value);
             }
@@ -55,8 +54,8 @@ function calcPropRadius(attValue) {
     // Use the Flannery Appearance Compensation formula with a smaller base
     var radius = 1.0083 * Math.pow(attValue / minValue, 0.5715) * minRadius;
     
-    // Cap the maximum radius to avoid very large symbols
-    var maxRadius = 20; // Adjust this value as needed
+    // Cap the maximum radius 
+    var maxRadius = 20; 
     return Math.min(radius, maxRadius);
 }
 
@@ -82,9 +81,6 @@ function pointToLayer(feature, latlng){
 
     //create circle marker layer
     var layer = L.circleMarker(latlng, options);
-
-    
-
 
      //build popup content string starting with city...Example 2.1 line 24
     var popupContent = "<p><b>City:</b> " + feature.properties["Region, subregion, country or area"] + "</p>";
