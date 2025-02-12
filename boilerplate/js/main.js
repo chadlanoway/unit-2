@@ -119,12 +119,8 @@ function getData() {
                     var originMarker = L.marker(originLatLng, { icon: greenIcon }).addTo(map);  // 6-4
                     var destinationMarker = L.marker(destinationLatLng, { icon: redIcon }).addTo(map);
 
-                    reverseGeocode(originLatLng, function(address) {    
-                        originMarker.bindPopup("<strong>Origin:</strong><br>" + address);
-                    });
-                    reverseGeocode(destinationLatLng, function(address) {
-                        destinationMarker.bindPopup("<strong>Destination:</strong><br>" + address);
-                    });
+                    handleLocation(originMarker, originLatLng, "Origin");
+                    handleLocation(destinationMarker, destinationLatLng, "Destination");                    
                 }
             }
         });
@@ -144,24 +140,113 @@ function getData() {
       
 }
 
-
 /*
- *  function to reverse geocode coords with nominatim api
+ *  function to find wiki page using output string from reverseGeocode()
  */
-function reverseGeocode(latlng, callback) {
-    const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latlng.lat}&lon=${latlng.lng}`;
-    fetch(url)
-       .then(response => response.json())
-       .then(data => {
-           const address = data.display_name || "Address not found";
-           callback(address);
-       })
-       .catch(error => {
-           console.error("Error during reverse geocoding:", error);
-           callback("Unknown location");
-       });
+function getWikipediaInfo(placeName, callback) {
+    const apiUrl = `https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&prop=extracts|pageimages&exintro=true&titles=${encodeURIComponent(placeName)}&pithumbsize=400`;
+
+    fetch(apiUrl)
+        .then(response => response.json())
+        .then(data => {
+            const pages = data.query.pages;
+            const page = Object.values(pages)[0]; 
+
+            const description = page.extract || "No description available.";
+            const imageUrl = page.thumbnail ? page.thumbnail.source : null;
+
+            callback({ description, imageUrl });
+        })
+        .catch(error => {
+            console.error("Error fetching Wikipedia info:", error);
+            callback({ description: "No description available.", imageUrl: null });
+        });
 }
 
+/*
+ *  function to reverse geocode coordinates
+ *  don't let advisarial nation states get ahold of my mapbox key....
+ */
+const MAPBOX_API_KEY = 'pk.eyJ1IjoiNTlub3J0aGx0ZCIsImEiOiJjbHBxc3oyaXUwMzcyMmpycTh4NXhoaXdxIn0.B5kKfrsYmKeyNTAunWK2Yg'; 
+
+function reverseGeocode(latlng, callback) {
+    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${latlng.lng},${latlng.lat}.json?access_token=${MAPBOX_API_KEY}&types=poi,place,locality,neighborhood`;
+
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            if (data.features && data.features.length > 0) {
+                const bestMatch = data.features[0];
+                const address = bestMatch.place_name || "Address not found";
+                callback(address, bestMatch);  
+            } else {
+                callback("Unknown location", null);
+            }
+        })
+        .catch(error => {
+            console.error("Error during Mapbox reverse geocoding:", error);
+            callback("Unknown location", null);
+        });
+}
+
+/*
+ *  function to load pop-up with wiki info for a location and bind to a marker
+ */
+function handleLocation(marker, latlng, label) {
+    reverseGeocode(latlng, function (address, feature) {
+        const placeName = feature ? feature.text : address;
+
+        getWikipediaInfo(placeName, function (info) {
+            if (info.description === "No description available.") {
+                searchWikipedia(placeName, function (searchInfo) {
+                    const popupContent = `
+                        <div class="custom-popup">
+                            <strong>${label}: ${searchInfo.title || placeName}</strong><br>${address}<br><br>
+                            ${searchInfo.imageUrl ? `<img src="${searchInfo.imageUrl}" style="width:100%;">` : ""}
+                            <p>${searchInfo.description}</p>
+                        </div>
+                    `;
+                    marker.bindPopup(popupContent);
+                });
+            } else {
+                const popupContent = `
+                    <div class="custom-popup">
+                        <strong>${label}: ${placeName}</strong><br>${address}<br><br>
+                        ${info.imageUrl ? `<img src="${info.imageUrl}" style="width:100%;">` : ""}
+                        <p>${info.description}</p>
+                    </div>
+                `;
+                marker.bindPopup(popupContent);
+            }
+        });
+    });
+}
+
+/*
+ *  function to retrieve wiki data from page
+ */
+function searchWikipedia(query, callback) {
+    const apiUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&origin=*`;
+
+    fetch(apiUrl)
+        .then(response => response.json())
+        .then(data => {
+            const searchResults = data.query.search;
+
+            if (searchResults.length > 0) {
+                // Skip disambiguation pages
+                const bestMatch = searchResults.find(result => !result.title.includes("disambiguation")) || searchResults[0];
+
+                getWikipediaInfo(bestMatch.title, callback);
+            } else {
+                callback({ description: "No description available.", imageUrl: null });
+            }
+        })
+        .catch(error => {
+            console.error("Error with Wikipedia search:", error);
+            callback({ description: "No description available.", imageUrl: null });
+        });
+}
 
 /*
  *  helper to escape a bunch of '&' in the gpx
