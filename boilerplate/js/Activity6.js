@@ -84,11 +84,9 @@ function pointToLayer(feature, latlng, attributes) {
     var layer = L.circleMarker(latlng, options);
 
     // Build the popup content string
-    var popupContent = "<p><b>City:</b> " + feature.properties["Region, subregion, country or area"] + "</p>";
-    popupContent += "<p><b>Population in " + attribute + ":</b> " + feature.properties[attribute] + " thousand</p>";
-
-    // Bind the popup to the layer
-    layer.bindPopup(popupContent);
+    var popupContent = createPopupContent(feature.properties, attribute);
+    //bind the popup to the circle marker    
+    layer.bindPopup(popupContent, {  offset: new L.Point(0,-options.radius)    });
 
     return layer;
 }
@@ -110,6 +108,17 @@ function createPropSymbols(data, attributes){
     }).addTo(map);
     // Zoom the map to the bounds of the geojson layer
     map.fitBounds(geojsonLayer.getBounds());
+};
+
+function createPopupContent(properties, attribute){
+    //add city to popup content string
+    var popupContent = "<p><b>City:</b> " + properties["Region, subregion, country or area"] + "</p>";
+
+    //add formatted attribute to panel content string
+    var year = attribute;
+    popupContent += "<p><b>Population in " + year + ":</b> " + properties[attribute] + " thousand</p>";
+
+    return popupContent;
 };
 
 function getData(){
@@ -193,18 +202,13 @@ function processData(data){
 function updatePropSymbols(attribute) {
     map.eachLayer(function(layer) {
         if (layer.feature && layer.feature.properties[attribute]) {
-            // Access feature properties
             var props = layer.feature.properties;
-
-            // Update each feature's radius based on the new attribute value
             var radius = calcPropRadius(Number(props[attribute]));
             layer.setRadius(radius);
 
-            // Build the updated popup content string
-            var popupContent = "<p><b>City:</b> " + props["Region, subregion, country or area"] + "</p>";
-            popupContent += "<p><b>Population in " + attribute + ":</b> " + props[attribute] + " thousand</p>";
+            // Use the helper function to rebuild the popup content
+            var popupContent = createPopupContent(props, attribute);
 
-            // If the layer already has a popup, update its content
             var popup = layer.getPopup();
             if (popup) {
                 popup.setContent(popupContent).update();
