@@ -103,18 +103,31 @@ function createPropSymbols(data){
     }).addTo(map);
 };
 
-// Step 2: Import GeoJSON data
 function getData(){
     fetch("data/LatPop.geojson")
         .then(function(response){
             return response.json();
         })
         .then(function(json){
-            //calculate minimum data value
             minValue = calculateMinValue(json);
             //call function to create proportional symbols
             createPropSymbols(json);
-        });
+            createSequenceControls();
+        })
 }
+
+function createSequenceControls(){
+    var slider = "<input class='range-slider' type='range'></input>";
+    document.querySelector("#panel").insertAdjacentHTML('beforeend',slider);
+
+    //set slider attributes
+    document.querySelector(".range-slider").max = 6;
+    document.querySelector(".range-slider").min = 0;
+    document.querySelector(".range-slider").value = 0;
+    document.querySelector(".range-slider").step = 1;
+    // buttons
+    document.querySelector('#panel').insertAdjacentHTML('beforeend','<button class="step" id="reverse">Reverse</button>');
+    document.querySelector('#panel').insertAdjacentHTML('beforeend','<button class="step" id="forward">Forward</button>');
+};
 
 document.addEventListener('DOMContentLoaded', createMap);

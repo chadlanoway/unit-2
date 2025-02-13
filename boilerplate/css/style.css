@@ -8,15 +8,49 @@ body {
     height: 100vh;
   }
 
-  #map {
+ /* #map {
   height: 100vh; 
   width: 100%;  
   position: absolute; 
   top: 0;
   left: 0;
   z-index: 1; 
-  }
+  }*/
 
+  #map {    
+    height: 400px;    
+    width: 80%;
+    display: inline-block;
+    }
+
+    #panel {  
+    width: 25%;  
+    padding: 20px;  
+    display: inline-block;  
+    vertical-align: top;  
+    text-align: center;  
+    line-height: 42px;  
+}  
+
+.range-slider {  
+    width: 55%;  
+}  
+
+.step {  
+    width: 20%;  
+}  
+
+.step img {  
+    width: 100%;  
+}  
+
+#forward {  
+    float: right;  
+}  
+
+#reverse {  
+    float: left;  
+}
   .title-container {
     position: absolute;
     top: 20px;
