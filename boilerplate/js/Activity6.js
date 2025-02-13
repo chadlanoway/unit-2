@@ -101,6 +101,15 @@ function createPropSymbols(data, attributes){
             return pointToLayer(feature, latlng, attributes);
         }
     }).addTo(map);
+
+    //Make a layer to pass to getBounds
+    var geojsonLayer = L.geoJson(data, {
+        pointToLayer: function(feature, latlng){
+            return pointToLayer(feature, latlng, attributes);
+        }
+    }).addTo(map);
+    // Zoom the map to the bounds of the geojson layer
+    map.fitBounds(geojsonLayer.getBounds());
 };
 
 function getData(){
