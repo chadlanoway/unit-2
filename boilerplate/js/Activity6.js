@@ -1,221 +1,198 @@
-// Declare map variable globally so all functions have access
-var map;
-var minValue;
-
-// Step 1: Create the map
-function createMap(){
-    map = L.map('map', {
+class MapApp {
+    constructor(mapId, dataUrl) {
+      this.mapId = mapId;
+      this.dataUrl = dataUrl;
+      this.map = null;
+      this.minValue = null;
+      this.attributes = [];
+      this.initMap();
+    }
+  
+    // initialize the map and load data
+    initMap() {
+      this.map = L.map(this.mapId, {
         center: [0, 0],
         zoom: 2
-    });
-
-    // Add OSM base tile layer
-    L.tileLayer('http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      });
+  
+      // add OSM base tile layer
+      L.tileLayer("http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>'
-    }).addTo(map);
-
-    // Call getData function
-    getData();
-}
-
-// Calculate the minimum value 
-function calculateMinValue(data){
-
-    var allValues = [];
-    
-    // Loop through each city
-    for (var city of data.features){
-        // Loop through each year (1985 to 2015 by 5)
-        for (var year = 1985; year <= 2015; year += 5){
-            // Get population for current year
-            var value = city.properties[String(year)];
-            // Only include nonzero values, there's a few <1000 pop so 0
-            if (value > 0) {
-                allValues.push(value);
-            }
+      }).addTo(this.map);
+  
+      this.getData();
+    }
+  
+    // fetch and process the geojson
+    getData() {
+      fetch(this.dataUrl)
+        .then(response => response.json())
+        .then(data => {
+          this.attributes = this.processData(data);
+          this.minValue = this.calculateMinValue(data);
+          this.createPropSymbols(data);
+          this.createSequenceControls();
+        });
+    }
+  
+    // array of attributes 
+    processData(data) {
+      let attributes = [];
+      let properties = data.features[0].properties;
+      for (let attribute in properties) {
+        if (/^\d{4}$/.test(attribute)) {
+          attributes.push(attribute);
         }
+      }
+      console.log("Attributes:", attributes);
+      return attributes;
     }
-    // Get minimum value from our array
-    var minValue = Math.min(...allValues);
-    console.log("minValue:", minValue);
-    return minValue;
-}
-
-// Calculate the radius of each proportional symbol
-function calcPropRadius(attValue) {
-    // Set a smaller base radius to reduce symbol sizes
-    var minRadius = 2;
-
-    // If the attribute value is 0, return a very small radius
-    if (attValue === 0) {
+  
+    // calculate the minimum population value
+    calculateMinValue(data) {
+      let allValues = [];
+      data.features.forEach(city => {
+        for (let year = 1985; year <= 2015; year += 5) {
+          let value = city.properties[String(year)];
+          if (value > 0) {
+            allValues.push(value);
+          }
+        }
+      });
+      const minValue = Math.min(...allValues);
+      console.log("minValue:", minValue);
+      return minValue;
+    }
+  
+    // calculate the radius of each proportional symbol
+    calcPropRadius(attValue) {
+      const minRadius = 2;
+      if (attValue === 0) {
         return minRadius * 0.5;
+      }
+      let radius = 1.0083 * Math.pow(attValue / this.minValue, 0.5715) * minRadius;
+      const maxRadius = 20;
+      return Math.min(radius, maxRadius);
     }
-    
-    // Use the Flannery Appearance Compensation formula with a smaller base
-    var radius = 1.0083 * Math.pow(attValue / minValue, 0.5715) * minRadius;
-    
-    // Cap the maximum radius 
-    var maxRadius = 20; 
-    return Math.min(radius, maxRadius);
-}
-
-//function to convert markers to circle markers
-function pointToLayer(feature, latlng, attributes) {
-    // Determine which attribute to visualize using the first attribute in the array
-    var attribute = attributes[0];
-    console.log(attribute); // Check which attribute is being used
-
-    // Create marker options
-    var options = {
+  
+    // create circle markers for each point
+    pointToLayer(feature, latlng, attribute) {
+      const options = {
         fillColor: "#ff7800",
         color: "#000",
         weight: 1,
         opacity: 1,
         fillOpacity: 0.8
-    };
-
-    // Get the attribute value and convert it to a number
-    var attValue = Number(feature.properties[attribute]);
-
-    // Calculate the radius based on the attribute value
-    options.radius = calcPropRadius(attValue);
-
-    // Create the circle marker
-    var layer = L.circleMarker(latlng, options);
-
-    // Build the popup content string
-    var popupContent = createPopupContent(feature.properties, attribute);
-    //bind the popup to the circle marker    
-    layer.bindPopup(popupContent, {  offset: new L.Point(0,-options.radius)    });
-
-    return layer;
-}
-
-//Add circle markers for point features to the map
-function createPropSymbols(data, attributes){
-    //create a Leaflet GeoJSON layer and add it to the map
-    L.geoJson(data, {
-        pointToLayer: function(feature, latlng){
-            return pointToLayer(feature, latlng, attributes);
-        }
-    }).addTo(map);
-
-    //Make a layer to pass to getBounds
-    var geojsonLayer = L.geoJson(data, {
-        pointToLayer: function(feature, latlng){
-            return pointToLayer(feature, latlng, attributes);
-        }
-    }).addTo(map);
-    // Zoom the map to the bounds of the geojson layer
-    map.fitBounds(geojsonLayer.getBounds());
-};
-
-function createPopupContent(properties, attribute){
-    //add city to popup content string
-    var popupContent = "<p><b>City:</b> " + properties["Region, subregion, country or area"] + "</p>";
-
-    //add formatted attribute to panel content string
-    var year = attribute;
-    popupContent += "<p><b>Population in " + year + ":</b> " + properties[attribute] + " thousand</p>";
-
-    return popupContent;
-};
-
-function getData(){
-    fetch("data/LatPop.geojson")
-        .then(function(response){
-            return response.json();
-        })
-        .then(function(json){
-            //create an attributes array
-           var attributes = processData(json);
-           minValue = calculateMinValue(json);
-           createPropSymbols(json, attributes);
-           createSequenceControls(attributes);
-       })
-}
-
-function createSequenceControls(attributes){
-    var slider = "<input class='range-slider' type='range'></input>";
-    document.querySelector("#panel").insertAdjacentHTML('beforeend', slider);
-
-    // Set slider attributes
-    var rangeSlider = document.querySelector(".range-slider");
-    rangeSlider.max = attributes.length - 1; // using length instead of a hard-coded value
-    rangeSlider.min = 0;
-    rangeSlider.value = 0;
-    rangeSlider.step = 1;
-
-    // Add buttons
-    document.querySelector('#panel').insertAdjacentHTML('beforeend','<button class="step" id="reverse">Reverse</button>');
-    document.querySelector('#panel').insertAdjacentHTML('beforeend','<button class="step" id="forward">Forward</button>');
-
-    // Click listener for buttons
-    document.querySelectorAll('.step').forEach(function(step){
-        step.addEventListener("click", function(){
-            var index = parseInt(rangeSlider.value);
-            if (step.id == 'forward'){
-                index++;
-                // Wrap around if past the last attribute
-                index = index > attributes.length - 1 ? 0 : index;
-            } else if (step.id == 'reverse'){
-                index--;
-                // Wrap around if below the first attribute
-                index = index < 0 ? attributes.length - 1 : index;
-            }
-            // Update slider and proportional symbols
-            rangeSlider.value = index;
-            updatePropSymbols(attributes[index]);
-        });
-    });
-
-    // Input listener for slider
-    rangeSlider.addEventListener('input', function(){
-        var index = parseInt(this.value);
-        updatePropSymbols(attributes[index]);
-    });
-}
-
-
-function processData(data){
-    //empty array to hold attributes
-    var attributes = [];
-
-    //properties of the first feature in the dataset
-    var properties = data.features[0].properties;
-
-    //push each attribute name into attributes array
-    for (var attribute in properties){
-        // ugly but works for this
-        if (/^\d{4}$/.test(attribute)) {
-            attributes.push(attribute);
-        }
-    };
-
-    //check result
-    console.log(attributes);
-
-    return attributes;
-};
-
-//Step 10: Resize proportional symbols according to new attribute values
-function updatePropSymbols(attribute) {
-    map.eachLayer(function(layer) {
+      };
+  
+      let attValue = Number(feature.properties[attribute]);
+      options.radius = this.calcPropRadius(attValue);
+  
+      let layer = L.circleMarker(latlng, options);
+      
+      // format the popup
+      const popupContent = new PopupContent(feature.properties, attribute);
+      layer.bindPopup(popupContent.formatted);
+  
+      return layer;
+    }
+  
+    // create and add the geojson layer
+    createPropSymbols(data) {
+      const geojsonLayer = L.geoJson(data, {
+        pointToLayer: (feature, latlng) => this.pointToLayer(feature, latlng, this.attributes[0])
+      }).addTo(this.map);
+      
+      // zoom the map to the bounds 
+      this.map.fitBounds(geojsonLayer.getBounds());
+      
+      // Store the geojsonLayer reference if you later need to update each feature
+      this.geojsonLayer = geojsonLayer;
+    }
+  
+    // update the proportional symbols for a new attribute 
+    updatePropSymbols(attribute) {
+      this.geojsonLayer.eachLayer(layer => {
         if (layer.feature && layer.feature.properties[attribute]) {
-            var props = layer.feature.properties;
-            var radius = calcPropRadius(Number(props[attribute]));
-            layer.setRadius(radius);
-
-            // Use the helper function to rebuild the popup content
-            var popupContent = createPopupContent(props, attribute);
-
-            var popup = layer.getPopup();
-            if (popup) {
-                popup.setContent(popupContent).update();
-            }
+          const props = layer.feature.properties;
+          const newRadius = this.calcPropRadius(Number(props[attribute]));
+          layer.setRadius(newRadius);
+  
+          // update popup
+          const popupContent = new PopupContent(props, attribute);
+          let popup = layer.getPopup();
+          if (popup) {
+            popup.setContent(popupContent.formatted).update();
+          }
         }
-    });
-}
-
-
-document.addEventListener('DOMContentLoaded', createMap);
+      });
+    }
+  
+    // slider and button controls
+    createSequenceControls() {
+      const panel = document.querySelector("#panel");
+  
+      // slider element
+      const slider = document.createElement("input");
+      slider.setAttribute("type", "range");
+      slider.classList.add("range-slider");
+      slider.max = this.attributes.length - 1;
+      slider.min = 0;
+      slider.value = 0;
+      slider.step = 1;
+      panel.appendChild(slider);
+  
+      // forward and reverse buttons
+      const forwardBtn = document.createElement("button");
+      forwardBtn.textContent = "Forward";
+      forwardBtn.classList.add("step");
+      forwardBtn.id = "forward";
+      panel.appendChild(forwardBtn);
+  
+      const reverseBtn = document.createElement("button");
+      reverseBtn.textContent = "Reverse";
+      reverseBtn.classList.add("step");
+      reverseBtn.id = "reverse";
+      panel.appendChild(reverseBtn);
+  
+      // button click events
+      panel.querySelectorAll(".step").forEach(btn => {
+        btn.addEventListener("click", () => {
+          let index = parseInt(slider.value);
+          if (btn.id === "forward") {
+            index++;
+            index = index > this.attributes.length - 1 ? 0 : index;
+          } else if (btn.id === "reverse") {
+            index--;
+            index = index < 0 ? this.attributes.length - 1 : index;
+          }
+          slider.value = index;
+          this.updatePropSymbols(this.attributes[index]);
+        });
+      });
+  
+      // slider listener
+      slider.addEventListener("input", function () {
+        const index = parseInt(this.value);
+        this.updatePropSymbols(this.attributes[index]);
+      }.bind(this));
+    }
+  }
+  
+  // class to format popup HTML content
+  class PopupContent {
+    constructor(properties, attribute) {
+      this.properties = properties;
+      this.attribute = attribute;
+      this.year = attribute;
+      this.population = properties[attribute];
+      this.formatted = `<p><b>City:</b> ${this.properties["Region, subregion, country or area"]}</p>
+                        <p><b>Population in ${this.year}:</b> ${this.population} million</p>`;
+    }
+  }
+  
+  // Instantiate the MapApp when the DOM is loaded
+  document.addEventListener("DOMContentLoaded", () => {
+    const app = new MapApp("map", "data/LatPop.geojson");
+  });
+  
