@@ -32,17 +32,28 @@ body {
     line-height: 42px;  
 }  
 
+.sequence-control-container {  
+    width: 350px;  
+    height: 30px;  
+    background-color: rgba(255,255,255,0.8);  
+    padding: 10px;  
+    line-height: 45px;  
+    text-align: center;  
+    border: solid gray 1px;  
+}  
+
 .range-slider {  
-    width: 55%;  
+    width: 250px;  
 }  
 
 .step {  
-    width: 20%;  
+    width: 40px;  
 }  
 
 .step img {  
     width: 100%;  
-}  
+    height: auto;  
+} 
 
 #forward {  
     float: right;  
@@ -105,3 +116,23 @@ body {
 .leaflet-popup-content p {
     margin: 0.2em 0;
 }
+
+.legend-control-container {
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: 5px;
+    padding: 6px 8px;
+    font: 14px/16px arial, helvetica, sans-serif;
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+    color: #333;
+  }
+  
+  .legend-control-container h4 {
+    margin: 0 0 5px 0;
+    font-size: 16px;
+    color: #555;
+  }
+  
+  .legend-control-container p {
+    margin: 2px 0;
+  }
+  
