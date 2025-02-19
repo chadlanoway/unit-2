@@ -1,21 +1,26 @@
-// datamanager class handles fetching and processing data
+
+var dataStats = {};// datamanager class handles fetching and processing data
 class DataManager {
     constructor(dataUrl) {
         this.dataUrl = dataUrl;
     }
 
-    // fetch and process data
+    //function to fetch and process data
     fetchData() {
         return fetch(this.dataUrl)
             .then(response => response.json())
             .then(data => {
+                // calculate stats on the data
+                this.calcStats(data); // This will compute and store stats in your dataStats object
+    
                 const attributes = this.getAttributes(data);
-                const minValue = this.calculateMinValue(data);
-                return { data, attributes, minValue };
+                // Optionally, if you want to return specific stats like minValue,
+                // you can reference dataStats.min if that's what you're after.
+                return { data, attributes, stats: dataStats };
             });
-    }
+    }    
 
-    // build an array of attributes from the data
+    //function to build an array of attributes from the data
     getAttributes(data) {
         let attributes = [];
         let properties = data.features[0].properties;
@@ -26,7 +31,7 @@ class DataManager {
         }
         return attributes;
     }
-
+    /*
     // calculate the minimum population value
     calculateMinValue(data) {
         let allValues = [];
@@ -40,7 +45,28 @@ class DataManager {
         });
         return Math.min(...allValues);
     }
+    */
+    // function to get mean, max, min from the years
+    calcStats(data) {
+        var allValues = [];
+        for (var city of data.features) {
+            for (var year = 1985; year <= 2015; year += 5) {
+                var value = city.properties[String(year)];
+                // Only push values greater than 0 <-- need a cleaner way to deal with divide by 0 issue
+                if (value > 0) {
+                    allValues.push(value);
+                }
+            }
+        }
+        dataStats.min = Math.min(...allValues);
+        dataStats.max = Math.max(...allValues);
+        var sum = allValues.reduce((a, b) => a + b, 0);
+        dataStats.mean = sum / allValues.length;
+    }
+    
 }
+
+ 
 
 // mapapp class does the map logic
 class MapApp {
@@ -62,39 +88,38 @@ class MapApp {
             zoom: 2
         });
 
-        // add osm base tile layer
+        // add osm base tile layer and credit the data source
         L.tileLayer("http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-            attribution:
-                '&copy; <a href="http://www.openstreetmap.org/copyright">openstreetmap contributors</a>'
-        }).addTo(this.map);
-
+          attribution:
+              '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors | Data: <a href="https://population.un.org/wup/downloads" target="_blank">United Nations World Population Prospects</a>'
+      }).addTo(this.map);
+      
         this.loadData();
     }
 
-    // use datamanager to fetch and process data
+    // function to use datamanager to fetch and process data
     loadData() {
-        this.dataManager.fetchData().then(({ data, attributes, minValue }) => {
+        this.dataManager.fetchData().then(({ data, attributes, stats }) => {
             this.attributes = attributes;
-            this.minValue = minValue;
+            this.minValue = stats.min;  // now set minValue from stats
             this.createPropSymbols(data);
             this.createSequenceControls();
-            // call createlegend passing the attributes array
             this.createLegend(attributes);
-        });
+        });        
     }
 
-    // calculate the radius of each proportional symbol
+    //function to calculate the radius of each proportional symbol
     calcPropRadius(attValue) {
         const minRadius = 2;
-        if (attValue === 0) {
-            return minRadius * 0.5;
-        }
-        let radius = 1.0083 * Math.pow(attValue / this.minValue, 0.5715) * minRadius;
-        const maxRadius = 20;
-        return Math.min(radius, maxRadius);
+        const maxRadius = 40;
+        if (attValue <= 0) return minRadius * 0.5;
+        // Using logarithmic scaling:
+        let scale = (Math.log(attValue) - Math.log(this.minValue)) / (Math.log(dataStats.max) - Math.log(this.minValue));
+        let radius = minRadius + scale * (maxRadius - minRadius);
+        return radius;
     }
-
-    // create circle markers for each point
+    
+    //function to create circle markers for each point
     pointToLayer(feature, latlng, attribute) {
         const options = {
             fillColor: "#ff7800",
@@ -114,7 +139,7 @@ class MapApp {
         return layer;
     }
 
-    // create and add the geojson layer
+    //function to create and add the geojson layer
     createPropSymbols(data) {
         this.geojsonLayer = L.geoJson(data, {
             pointToLayer: (feature, latlng) =>
@@ -125,10 +150,10 @@ class MapApp {
         this.map.fitBounds(this.geojsonLayer.getBounds());
     }
 
-    // update the proportional symbols for a new attribute
+    //function to update the proportional symbols for a new attribute
     updatePropSymbols(attribute) {
         this.geojsonLayer.eachLayer(layer => {
-            if (layer.feature && layer.feature.properties[attribute]) {
+            if (layer.feature && layer.feature.properties[attribute] !== undefined) {
                 const props = layer.feature.properties;
                 const newRadius = this.calcPropRadius(Number(props[attribute]));
                 layer.setRadius(newRadius);
@@ -138,11 +163,28 @@ class MapApp {
                     popup.setContent(popupContent.formatted).update();
                 }
             }
-        });
+        });        
         // update the legend with the current attribute
         this.updateLegend(attribute);
     }
-
+    // helper to get attribute stats
+    getAttributeStats(attribute) {
+        let values = [];
+        this.geojsonLayer.eachLayer(layer => {
+            let val = Number(layer.feature.properties[attribute]);
+            if (!isNaN(val) && val > 0) {
+              values.push(val);
+            }
+          });
+          
+        return {
+          min: Math.min(...values),
+          max: Math.max(...values),
+          mean: values.reduce((a, b) => a + b, 0) / values.length
+        };
+      }
+      
+/*
     // add the legend and store a reference to its container
     createLegend(attributes) {
         let LegendControl = L.Control.extend({
@@ -164,17 +206,146 @@ class MapApp {
         // store the legend container element for later updates
         this.legendContainer = document.querySelector(".legend-control-container");
     }
+*/
 
-    // new method to update legend content dynamically
-    updateLegend(attribute) {
-        if (this.legendContainer) {
-            // update the legend content to reflect the current attribute
-            this.legendContainer.querySelector("#legend-year").innerHTML =
-                "year: " + attribute;
+//function to make a legend that syncs the data with slider
+createLegend(attributes) {
+  const self = this;
+  const LegendControl = L.Control.extend({
+    options: { position: "bottomright" },
+    onAdd: function () {
+      // 1) Create the container
+      const container = L.DomUtil.create("div", "legend-control-container");
+      container.innerHTML = `
+        <p class="temporalLegend">
+          Population in <span class="year">${attributes[0]}</span>
+        </p>`;
+
+      // 2) Calculate stats for the initial attribute
+      const stats = self.getAttributeStats(attributes[0]);
+      const dataStatsLocal = {
+        max: stats.max,
+        mean: stats.mean,
+        min: stats.min
+      };
+
+      // 3) make an svg thats tall enough for circles
+        const svgWidth = 300;
+        const svgHeight = 150;  
+        const baseY = 120;      // careful, this can clip the image
+        const circleX = 60;
+        const textX = 150;
+
+      // initial svg string
+      let svg = `<svg id="attribute-legend" width="${svgWidth}" height="${svgHeight}">`;
+
+      // 4) display circles in the order: max, mean, min
+      const circles = ["max", "mean", "min"];
+
+      // draw each circle near the bottom
+      circles.forEach(key => {
+        const value = dataStatsLocal[key];
+        const radius = self.calcPropRadius(value);
+        const cy = baseY - radius;
+
+        svg += `
+          <circle 
+            class="legend-circle"
+            id="${key}"
+            cx="${circleX}"
+            cy="${cy}"
+            r="${radius}"
+            fill="#F47821"
+            fill-opacity="0.8"
+            stroke="#000000"
+          />
+        `;
+      });
+
+      // 5) place each text label near the bottom as well.
+      const lineSpacing = 20;
+      let firstLineY = baseY - 5;
+      //format the data 
+      circles.forEach((key, i) => {
+        const value = dataStatsLocal[key];
+        let formattedValue;
+        if (value >= 1000) {
+          formattedValue = (Math.round((value / 1000) * 100) / 100) + " million";
+        } else {
+          formattedValue = (Math.round(value * 100) / 100) + " thousand";
         }
-    }
 
-    // add the sequence control to the map and set up its events
+        const textY = firstLineY - i * lineSpacing;
+
+        svg += `
+          <text
+            id="${key}-text"
+            x="${textX}"
+            y="${textY}"
+            font-size="14"
+            fill="#000"
+            dominant-baseline="alphabetic"
+          >
+            ${formattedValue}
+          </text>
+        `;
+      });
+
+      // Close the SVG string
+      svg += "</svg>";
+
+      // Insert the SVG into the container
+      container.insertAdjacentHTML("beforeend", svg);
+
+      return container;
+    }
+  });
+
+  // Add the legend control to the map
+  this.map.addControl(new LegendControl());
+  // Store a reference for updates
+  this.legendContainer = document.querySelector(".legend-control-container");
+}
+
+// funnction to update the legend labels when the button or slider is interacted with
+updateLegend(attribute) {
+    if (this.legendContainer) {
+      // update the legend year text
+      this.legendContainer.querySelector(".year").innerHTML = attribute;
+  
+      // get new stats for the current attribute
+      const stats = this.getAttributeStats(attribute);
+      const circleValues = { max: stats.max, mean: stats.mean, min: stats.min };
+  
+      //size the circles
+      Object.keys(circleValues).forEach(key => {
+        const newRadius = this.calcPropRadius(circleValues[key]);
+        const circleElem = this.legendContainer.querySelector("#" + key);
+        if (circleElem) {
+          circleElem.setAttribute("r", newRadius);
+        }
+      });
+  
+      // update each legend text label with the new population value
+      const circles = ["max", "mean", "min"];
+      circles.forEach(key => {
+        const textElem = this.legendContainer.querySelector("#" + key + "-text");
+        if (textElem) {
+          let value = circleValues[key];
+          let formattedValue;
+          if (value >= 1000) {
+            formattedValue = Math.round((value / 1000) * 100) / 100 + " million";
+          } else {
+            formattedValue = Math.round(value * 100) / 100 + " thousand";
+          }
+          textElem.textContent = formattedValue;
+        }
+      });
+    }
+  }
+  
+
+    // function to add the sequence control to the map and set up its events
     createSequenceControls() {
         // add the custom sequencecontrol to the map
         this.map.addControl(new SequenceControl({ position: "bottomleft" }));
@@ -210,7 +381,7 @@ class MapApp {
     }
 }
 
-// sequencecontrol class extends l.control for custom sequence ui controls
+// sequencecontrol class extends l.control
 class SequenceControl extends L.Control {
     constructor(options) {
         super(options);
@@ -227,7 +398,7 @@ class SequenceControl extends L.Control {
         // create the slider and insert it into the container
         container.insertAdjacentHTML("beforeend", '<input class="range-slider" type="range">');
 
-        // create additional controls (buttons) and append them
+        // create additional controls and append them
         container.insertAdjacentHTML("beforeend", '<button class="step" id="reverse">&#9668;</button>');
         container.insertAdjacentHTML("beforeend", '<button class="step" id="forward">&#9658;</button>');
 
@@ -238,20 +409,34 @@ class SequenceControl extends L.Control {
 // popupcontent class formats the popup html content
 class PopupContent {
     constructor(properties, attribute) {
-        this.properties = properties;
-        this.attribute = attribute;
-        this.year = attribute;
-        this.population = properties[attribute];
+      this.properties = properties;
+      this.attribute = attribute;
+      this.year = attribute;
+      // make sure the population value is a number
+      this.population = Number(properties[attribute]);
+      
+      let formattedPopulation;
+      
+      // if population is 1000 or more display in millions
+      if (this.population >= 1000) {
+        let inMillions = this.population / 1000;
+        // one decimal place
+        formattedPopulation = inMillions.toLocaleString(undefined, {
+          minimumFractionDigits: 1,
+          maximumFractionDigits: 1
+        });
         this.formatted =
-            '<p><b>city:</b> ' +
-            this.properties["Region, subregion, country or area"] +
-            "</p><p><b>population in " +
-            this.year +
-            ":</b> " +
-            this.population +
-            " million</p>";
+          `<p><b>city:</b> ${this.properties["Region, subregion, country or area"]}</p>` +
+          `<p><b>population in ${this.year}:</b> ${formattedPopulation} million</p>`;
+      } else {
+        // otherwise use commas
+        formattedPopulation = this.population.toLocaleString();
+        this.formatted =
+          `<p><b>city:</b> ${this.properties["Region, subregion, country or area"]}</p>` +
+          `<p><b>population in ${this.year}:</b> ${formattedPopulation} thousand</p>`;
+      }
     }
-}
+  }  
 
 // instantiate the mapapp when the dom is loaded
 document.addEventListener("DOMContentLoaded", () => {
