@@ -261,12 +261,13 @@ createLegend(attributes) {
           />
         `;
       });
-
-      // 5) place each text label near the bottom as well.
+      //reverse the label order
+      const labelOrder = [...circles].reverse();
+      // 5) place each text label near the bottom as well
       const lineSpacing = 20;
       let firstLineY = baseY - 5;
       //format the data 
-      circles.forEach((key, i) => {
+      labelOrder.forEach((key, i) => {
         const value = dataStatsLocal[key];
         let formattedValue;
         if (value >= 1000) {
