@@ -1,4 +1,3 @@
-
 var dataStats = {};// datamanager class handles fetching and processing data
 class DataManager {
     constructor(dataUrl) {
@@ -269,12 +268,7 @@ createLegend(attributes) {
       //format the data 
       labelOrder.forEach((key, i) => {
         const value = dataStatsLocal[key];
-        let formattedValue;
-        if (value >= 1000) {
-          formattedValue = (Math.round((value / 1000) * 100) / 100) + " million";
-        } else {
-          formattedValue = (Math.round(value * 100) / 100) + " thousand";
-        }
+        const formattedValue = formatPopulation(value);
 
         const textY = firstLineY - i * lineSpacing;
 
@@ -332,13 +326,8 @@ updateLegend(attribute) {
       circles.forEach(key => {
         const textElem = this.legendContainer.querySelector("#" + key + "-text");
         if (textElem) {
-          let value = circleValues[key];
-          let formattedValue;
-          if (value >= 1000) {
-            formattedValue = Math.round((value / 1000) * 100) / 100 + " million";
-          } else {
-            formattedValue = Math.round(value * 100) / 100 + " thousand";
-          }
+          const value = circleValues[key];
+          const formattedValue = formatPopulation(value);
           textElem.textContent = formattedValue;
         }
       });
@@ -416,28 +405,25 @@ class PopupContent {
       // make sure the population value is a number
       this.population = Number(properties[attribute]);
       
-      let formattedPopulation;
+      const formattedPopulation = formatPopulation(this.population);
       
-      // if population is 1000 or more display in millions
-      if (this.population >= 1000) {
-        let inMillions = this.population / 1000;
-        // one decimal place
-        formattedPopulation = inMillions.toLocaleString(undefined, {
-          minimumFractionDigits: 1,
-          maximumFractionDigits: 1
-        });
-        this.formatted =
-          `<p><b>city:</b> ${this.properties["Region, subregion, country or area"]}</p>` +
-          `<p><b>population in ${this.year}:</b> ${formattedPopulation} million</p>`;
-      } else {
-        // otherwise use commas
-        formattedPopulation = this.population.toLocaleString();
-        this.formatted =
-          `<p><b>city:</b> ${this.properties["Region, subregion, country or area"]}</p>` +
-          `<p><b>population in ${this.year}:</b> ${formattedPopulation} thousand</p>`;
-      }
+      this.formatted =
+        `<p><b>city:</b> ${this.properties["Region, subregion, country or area"]}</p>` +
+        `<p><b>population in ${this.year}:</b> ${formattedPopulation}</p>`;
     }
   }  
+
+// function to format population values
+function formatPopulation(value) {
+    if (value >= 1000) {
+        return (value / 1000).toLocaleString(undefined, {
+            minimumFractionDigits: 1,
+            maximumFractionDigits: 1
+        }) + " million";
+    } else {
+        return value.toLocaleString() + " thousand";
+    }
+}
 
 // instantiate the mapapp when the dom is loaded
 document.addEventListener("DOMContentLoaded", () => {
